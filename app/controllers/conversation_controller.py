@@ -1,5 +1,5 @@
 from fastapi import HTTPException, status
-
+from app.models.cassandra_models import ConversationModel
 from app.schemas.conversation import ConversationResponse, PaginatedConversationResponse
 
 class ConversationController:
@@ -29,6 +29,29 @@ class ConversationController:
             HTTPException: If user not found or access denied
         """
         # This is a stub - students will implement the actual logic
+        try:
+            rows = await ConversationModel.get_user_conversations(user_id, page, limit)
+
+            conversations = [
+                ConversationResponse(
+                    conversation_id=row["conversation_id"],
+                    other_user_id=row["other_user_id"],
+                    last_message_at=row["last_message_at"]
+                )
+                for row in rows
+            ]
+
+            return PaginatedConversationResponse(
+                conversations=conversations,
+                page=page,
+                limit=limit,
+                total=len(conversations)  # Cassandra can't give total count directly
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error fetching conversations: {str(e)}"
+            )
         raise HTTPException(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
             detail="Method not implemented"

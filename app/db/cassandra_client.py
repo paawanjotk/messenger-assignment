@@ -7,6 +7,7 @@ import uuid
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 import logging
+import time
 
 from cassandra.cluster import Cluster, Session
 from cassandra.auth import PlainTextAuthProvider
@@ -30,7 +31,7 @@ class CassandraClient:
         if self._initialized:
             return
         
-        self.host = os.getenv("CASSANDRA_HOST", "localhost")
+        self.host = os.getenv("CASSANDRA_HOST", "cassandra")
         self.port = int(os.getenv("CASSANDRA_PORT", "9042"))
         self.keyspace = os.getenv("CASSANDRA_KEYSPACE", "messenger")
         
@@ -41,15 +42,29 @@ class CassandraClient:
         self._initialized = True
     
     def connect(self) -> None:
-        """Connect to the Cassandra cluster."""
-        try:
-            self.cluster = Cluster([self.host])
-            self.session = self.cluster.connect(self.keyspace)
-            self.session.row_factory = dict_factory
-            logger.info(f"Connected to Cassandra at {self.host}:{self.port}, keyspace: {self.keyspace}")
-        except Exception as e:
-            logger.error(f"Failed to connect to Cassandra: {str(e)}")
-            raise
+        """Connect to the Cassandra cluster with retries."""
+        retries = 10
+        for attempt in range(retries):
+            try:
+                self.cluster = Cluster([self.host], port=self.port)
+                self.session = self.cluster.connect()  # connect without keyspace first
+
+                self.session.execute(f"""
+                    CREATE KEYSPACE IF NOT EXISTS {self.keyspace}
+                    WITH replication = {{ 'class': 'SimpleStrategy', 'replication_factor': '1' }}
+                """)
+
+                self.session.set_keyspace(self.keyspace)
+                self.session.row_factory = dict_factory
+
+                logger.info(f"Connected to Cassandra at {self.host}:{self.port}, keyspace: {self.keyspace}")
+                return
+            except Exception as e:
+                logger.warning(f"Attempt {attempt + 1}/{retries} - Cassandra not ready yet: {str(e)}")
+                time.sleep(5)
+
+        logger.error(f"Failed to connect to Cassandra after {retries} attempts")
+        raise ConnectionError("Cassandra connection failed after retries")
     
     def close(self) -> None:
         """Close the Cassandra connection."""

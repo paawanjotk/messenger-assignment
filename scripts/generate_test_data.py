@@ -35,27 +35,68 @@ def connect_to_cassandra():
         raise
 
 def generate_test_data(session):
-    """
-    Generate test data in Cassandra.
-    
-    Students should implement this function to generate test data based on their schema design.
-    The function should create:
-    - Users (with IDs 1-NUM_USERS)
-    - Conversations between random pairs of users
-    - Messages in each conversation with realistic timestamps
-    """
     logger.info("Generating test data...")
+
+    # 1. Generate users
+    user_ids = []
+    for i in range(NUM_USERS):
+        user_id = uuid.uuid4()
+        name = f"User{i+1}"
+        email = f"user{i+1}@test.com"
+        profile_image = f"https://picsum.photos/seed/user{i+1}/200"
+        created_at = datetime.utcnow() - timedelta(days=random.randint(1, 100))
+
+        session.execute("""
+            INSERT INTO users (user_id, name, email, profile_image, created_at)
+            VALUES (%s, %s, %s, %s, %s)
+        """, (user_id, name, email, profile_image, created_at))
+
+        user_ids.append(user_id)
     
-    # TODO: Students should implement the test data generation logic
-    # Hint:
-    # 1. Create a set of user IDs
-    # 2. Create conversations between random pairs of users
-    # 3. For each conversation, generate a random number of messages
-    # 4. Update relevant tables to maintain data consistency
-    
-    logger.info(f"Generated {NUM_CONVERSATIONS} conversations with messages")
-    logger.info(f"User IDs range from 1 to {NUM_USERS}")
-    logger.info("Use these IDs for testing the API endpoints")
+    logger.info(f"Inserted {NUM_USERS} users.")
+
+    # 2. Create conversations between random pairs
+    for _ in range(NUM_CONVERSATIONS):
+        user_pair = random.sample(user_ids, 2)
+        sender_id, receiver_id = user_pair[0], user_pair[1]
+        conversation_id = uuid.uuid4()
+        num_messages = random.randint(5, MAX_MESSAGES_PER_CONVERSATION)
+        last_message_time = None
+
+        for i in range(num_messages):
+            created_at = datetime.utcnow() - timedelta(minutes=random.randint(0, 10000))
+            message_id = uuid.uuid4()
+            content = f"Hello from {sender_id} to {receiver_id} — msg {i+1}"
+
+            # Insert into messages_by_conversation
+            session.execute("""
+                INSERT INTO messages_by_conversation (
+                    conversation_id, created_at, message_id, sender_id, receiver_id, content
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+            """, (conversation_id, created_at, message_id, sender_id, receiver_id, content))
+
+            # Insert into messages_by_id
+            session.execute("""
+                INSERT INTO messages_by_id (
+                    message_id, conversation_id, sender_id, receiver_id, content, created_at
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+            """, (message_id, conversation_id, sender_id, receiver_id, content, created_at))
+
+            # Track the latest message time for convo
+            if not last_message_time or created_at > last_message_time:
+                last_message_time = created_at
+
+        # Update conversations_by_user for both users
+        for user_id, other_user_id in [(sender_id, receiver_id), (receiver_id, sender_id)]:
+            session.execute("""
+                INSERT INTO conversations_by_user (
+                    user_id, last_message_at, conversation_id, other_user_id
+                ) VALUES (%s, %s, %s, %s)
+            """, (user_id, last_message_time, conversation_id, other_user_id))
+
+    logger.info(f"Generated {NUM_CONVERSATIONS} conversations with messages.")
+    logger.info(f"User IDs range from 1 to {NUM_USERS}. Use them for testing API endpoints.")
+
 
 def main():
     """Main function to generate test data."""

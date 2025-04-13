@@ -43,6 +43,13 @@ def create_keyspace(session):
     
     # TODO: Students should implement keyspace creation
     # Hint: Consider replication strategy and factor for a distributed database
+    session.execute(f"""
+        CREATE KEYSPACE IF NOT EXISTS {CASSANDRA_KEYSPACE}
+        WITH replication = {{
+            'class': 'SimpleStrategy',
+            'replication_factor': '1'
+        }}
+    """)
     
     logger.info(f"Keyspace {CASSANDRA_KEYSPACE} is ready.")
 
@@ -59,6 +66,53 @@ def create_tables(session):
     # - What tables are needed to implement the required APIs?
     # - What should be the primary keys and clustering columns?
     # - How will you handle pagination and time-based queries?
+
+    # 1. messages_by_conversation
+    session.execute("""
+        CREATE TABLE IF NOT EXISTS messages_by_conversation (
+            conversation_id UUID,
+            created_at TIMESTAMP,
+            message_id UUID,
+            sender_id UUID,
+            receiver_id UUID,
+            content TEXT,
+            PRIMARY KEY (conversation_id, created_at)
+        ) WITH CLUSTERING ORDER BY (created_at DESC);
+    """)
+
+    # 2. conversations_by_user
+    session.execute("""
+        CREATE TABLE IF NOT EXISTS conversations_by_user (
+            user_id UUID,
+            last_message_at TIMESTAMP,
+            conversation_id UUID,
+            other_user_id UUID,
+            PRIMARY KEY (user_id, last_message_at)
+        ) WITH CLUSTERING ORDER BY (last_message_at DESC);
+    """)
+    
+
+    # 3. messages_by_id (optional direct access table)
+    session.execute("""
+        CREATE TABLE IF NOT EXISTS messages_by_id (
+            message_id UUID PRIMARY KEY,
+            conversation_id UUID,
+            sender_id UUID,
+            receiver_id UUID,
+            content TEXT,
+            created_at TIMESTAMP
+        );
+    """)
+
+    session.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            user_id UUID PRIMARY KEY,
+            name TEXT,
+            email TEXT,
+            profile_image TEXT,
+            created_at TIMESTAMP
+        );
+    """)
     
     logger.info("Tables created successfully.")
 

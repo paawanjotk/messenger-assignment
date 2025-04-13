@@ -3,7 +3,7 @@ Sample models for interacting with Cassandra tables.
 Students should implement these models based on their database schema design.
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
 from app.db.cassandra_client import cassandra_client
@@ -22,33 +22,107 @@ class MessageModel:
     # TODO: Implement the following methods
     
     @staticmethod
-    async def create_message(*args, **kwargs):
+    async def create_message(sender_id: uuid.UUID, receiver_id: uuid.UUID, content: str, **kwargs):
         """
         Create a new message.
         
         Students should decide what parameters are needed based on their schema design.
         """
+        session = cassandra_client.get_session()
+        created_at = datetime.now(timezone.utc)
+        message_id = uuid.uuid1()
+        participants = sorted([str(sender_id), str(receiver_id)])
+        conversation_id = uuid.uuid5(uuid.NAMESPACE_DNS, "-".join(participants))
         # This is a stub - students will implement the actual logic
+
+        # Insert into messages_by_conversation
+        session.execute("""
+            INSERT INTO messages_by_conversation (
+                conversation_id, message_id, sender_id, receiver_id, content, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+        """, (conversation_id, message_id, sender_id, receiver_id, content, created_at))
+
+        # Insert into messages_by_id
+        session.execute("""
+            INSERT INTO messages_by_id (
+                message_id, conversation_id, sender_id, receiver_id, content, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?)
+        """, (message_id, conversation_id, sender_id, receiver_id, content, created_at))
+
+        # Update conversations_by_user for both sender and receiver
+        for user_id, other_user_id in [(sender_id, receiver_id), (receiver_id, sender_id)]:
+            session.execute("""
+                INSERT INTO conversations_by_user (
+                    user_id, conversation_id, other_user_id, last_message, last_message_time
+                ) VALUES (?, ?, ?, ?, ?)
+            """, (user_id, conversation_id, other_user_id, content, created_at))
+
+        return {
+            "id": message_id,
+            "conversation_id": conversation_id,
+            "sender_id": sender_id,
+            "receiver_id": receiver_id,
+            "content": content,
+            "created_at": created_at
+        }
         raise NotImplementedError("This method needs to be implemented")
     
     @staticmethod
-    async def get_conversation_messages(*args, **kwargs):
+    async def get_conversation_messages(conversation_id: str, page: int = 1, limit: int = 20):
         """
         Get messages for a conversation with pagination.
         
         Students should decide what parameters are needed and how to implement pagination.
         """
         # This is a stub - students will implement the actual logic
+
+        session = cassandra_client.get_session()
+        conversation_id = uuid.UUID(conversation_id)
+        query = """
+        SELECT message_id, sender_id, receiver_id, content, created_at
+        FROM messages_by_conversation
+        WHERE conversation_id = %s
+        """
+        result = session.execute(query, (conversation_id,))
+        rows = list(result)
+
+        # Apply pagination manually (Cassandra doesn't support OFFSET)
+        offset = (page - 1) * limit
+        paginated = rows[offset:offset + limit]
+
+        return paginated
         raise NotImplementedError("This method needs to be implemented")
     
     @staticmethod
-    async def get_messages_before_timestamp(*args, **kwargs):
+    async def get_messages_before_timestamp(
+        conversation_id: str, 
+        before_timestamp: datetime, 
+        page: int = 1, 
+        limit: int = 20
+    ):
         """
         Get messages before a timestamp with pagination.
         
         Students should decide how to implement filtering by timestamp with pagination.
         """
         # This is a stub - students will implement the actual logic
+        
+        session = cassandra_client.get_session()
+        conversation_id = uuid.UUID(conversation_id)
+        query = """
+        SELECT message_id, sender_id, receiver_id, content, created_at
+        FROM messages_by_conversation
+        WHERE conversation_id = %s AND created_at < %s
+        LIMIT %s
+        """
+        result = session.execute(query, (conversation_id, before_timestamp, limit * page))
+        rows = list(result)
+
+        # Manual pagination
+        offset = (page - 1) * limit
+        paginated = rows[offset:offset + limit]
+
+        return paginated
         raise NotImplementedError("This method needs to be implemented")
 
 
@@ -66,13 +140,26 @@ class ConversationModel:
     # TODO: Implement the following methods
     
     @staticmethod
-    async def get_user_conversations(*args, **kwargs):
+    async def get_user_conversations(user_id: str, page: int = 1, limit: int = 20):
         """
         Get conversations for a user with pagination.
         
         Students should decide what parameters are needed and how to implement pagination.
         """
         # This is a stub - students will implement the actual logic
+        offset = (page - 1) * limit
+        query = """
+        SELECT conversation_id, other_user_id, last_message_at 
+        FROM conversations_by_user 
+        WHERE user_id = %s 
+        LIMIT %s;
+        """
+        rows = cassandra_client.execute(query, (user_id, offset + limit))
+        
+        # Apply pagination manually
+        paginated_rows = rows[offset:offset + limit]
+        
+        return paginated_rows
         raise NotImplementedError("This method needs to be implemented")
     
     @staticmethod
