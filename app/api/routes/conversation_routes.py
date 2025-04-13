@@ -10,7 +10,7 @@ router = APIRouter(prefix="/api/conversations", tags=["Conversations"])
 
 @router.get("/user/{user_id}", response_model=PaginatedConversationResponse)
 async def get_user_conversations(
-    user_id: int = Path(..., description="ID of the user"),
+    user_id: str = Path(..., description="ID of the user"),
     page: int = Query(1, description="Page number"),
     limit: int = Query(20, description="Number of conversations per page"),
     conversation_controller: ConversationController = Depends()

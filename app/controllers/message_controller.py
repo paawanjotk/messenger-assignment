@@ -33,7 +33,7 @@ class MessageController:
             )
 
             return MessageResponse(
-                id=result["message_id"],
+                id=result["id"],
                 conversation_id=result["conversation_id"],
                 sender_id=result["sender_id"],
                 receiver_id=result["receiver_id"],
@@ -82,9 +82,10 @@ class MessageController:
 
             messages = [
                 MessageResponse(
-                    id=row["message_id"],
-                    sender_id=row["sender_id"],
-                    receiver_id=row["receiver_id"],
+                    id= str(row["message_id"]),
+                    sender_id=str(row["sender_id"]),
+                    receiver_id=str(row["receiver_id"]),
+                    conversation_id=str(row["conversation_id"]),
                     content=row["content"],
                     created_at=row["created_at"]
                 ) for row in rows
@@ -142,9 +143,10 @@ class MessageController:
 
             messages = [
                 MessageResponse(
-                    id=row["message_id"],
-                    sender_id=row["sender_id"],
-                    receiver_id=row["receiver_id"],
+                    id=str(row["message_id"]),
+                    sender_id=str(row["sender_id"]),
+                    receiver_id=str(row["receiver_id"]),
+                    conversation_id=str(row["conversation_id"]),
                     content=row["content"],
                     created_at=row["created_at"]
                 ) for row in rows

@@ -22,7 +22,7 @@ class MessageModel:
     # TODO: Implement the following methods
     
     @staticmethod
-    async def create_message(sender_id: uuid.UUID, receiver_id: uuid.UUID, content: str, **kwargs):
+    async def create_message(sender_id: str, receiver_id: str, content: str, **kwargs):
         """
         Create a new message.
         
@@ -31,37 +31,38 @@ class MessageModel:
         session = cassandra_client.get_session()
         created_at = datetime.now(timezone.utc)
         message_id = uuid.uuid1()
-        participants = sorted([str(sender_id), str(receiver_id)])
+        participants = sorted([sender_id, receiver_id])
+        sender_id = uuid.UUID(sender_id)
+        receiver_id = uuid.UUID(receiver_id)
         conversation_id = uuid.uuid5(uuid.NAMESPACE_DNS, "-".join(participants))
         # This is a stub - students will implement the actual logic
 
-        # Insert into messages_by_conversation
+        
         session.execute("""
             INSERT INTO messages_by_conversation (
                 conversation_id, message_id, sender_id, receiver_id, content, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
+            ) VALUES (%s, %s, %s, %s, %s, %s)
         """, (conversation_id, message_id, sender_id, receiver_id, content, created_at))
 
-        # Insert into messages_by_id
         session.execute("""
             INSERT INTO messages_by_id (
                 message_id, conversation_id, sender_id, receiver_id, content, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?)
+            ) VALUES (%s, %s, %s, %s, %s, %s)
         """, (message_id, conversation_id, sender_id, receiver_id, content, created_at))
 
-        # Update conversations_by_user for both sender and receiver
         for user_id, other_user_id in [(sender_id, receiver_id), (receiver_id, sender_id)]:
             session.execute("""
                 INSERT INTO conversations_by_user (
-                    user_id, conversation_id, other_user_id, last_message, last_message_time
-                ) VALUES (?, ?, ?, ?, ?)
-            """, (user_id, conversation_id, other_user_id, content, created_at))
+                    user_id, conversation_id, other_user_id, last_message_at
+                ) VALUES (%s, %s, %s, %s)
+            """, (user_id, conversation_id, other_user_id, created_at))
+
 
         return {
-            "id": message_id,
-            "conversation_id": conversation_id,
-            "sender_id": sender_id,
-            "receiver_id": receiver_id,
+            "id": str(message_id),
+            "conversation_id": str(conversation_id),
+            "sender_id": str(sender_id),
+            "receiver_id": str(receiver_id),
             "content": content,
             "created_at": created_at
         }
@@ -79,13 +80,13 @@ class MessageModel:
         session = cassandra_client.get_session()
         conversation_id = uuid.UUID(conversation_id)
         query = """
-        SELECT message_id, sender_id, receiver_id, content, created_at
+        SELECT message_id, sender_id, receiver_id, content, created_at, conversation_id
         FROM messages_by_conversation
         WHERE conversation_id = %s
         """
         result = session.execute(query, (conversation_id,))
         rows = list(result)
-
+        print(rows)
         # Apply pagination manually (Cassandra doesn't support OFFSET)
         offset = (page - 1) * limit
         paginated = rows[offset:offset + limit]
@@ -110,7 +111,7 @@ class MessageModel:
         session = cassandra_client.get_session()
         conversation_id = uuid.UUID(conversation_id)
         query = """
-        SELECT message_id, sender_id, receiver_id, content, created_at
+        SELECT message_id, sender_id, receiver_id, content, created_at, conversation_id
         FROM messages_by_conversation
         WHERE conversation_id = %s AND created_at < %s
         LIMIT %s
@@ -148,8 +149,9 @@ class ConversationModel:
         """
         # This is a stub - students will implement the actual logic
         offset = (page - 1) * limit
+        user_id = uuid.UUID(user_id)
         query = """
-        SELECT conversation_id, other_user_id, last_message_at 
+        SELECT conversation_id, user_id, other_user_id, last_message_at 
         FROM conversations_by_user 
         WHERE user_id = %s 
         LIMIT %s;

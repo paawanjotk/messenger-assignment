@@ -6,13 +6,13 @@ class MessageBase(BaseModel):
     content: str = Field(..., description="Content of the message")
 
 class MessageCreate(MessageBase):
-    sender_id: int = Field(..., description="ID of the sender")
-    receiver_id: int = Field(..., description="ID of the receiver")
+    sender_id: str = Field(..., description="ID of the sender")
+    receiver_id: str = Field(..., description="ID of the receiver")
 
 class MessageResponse(MessageBase):
-    id: int = Field(..., description="Unique ID of the message")
-    sender_id: int = Field(..., description="ID of the sender")
-    receiver_id: int = Field(..., description="ID of the receiver")
+    id: str = Field(..., description="Unique ID of the message")
+    sender_id: str = Field(..., description="ID of the sender")
+    receiver_id: str = Field(..., description="ID of the receiver")
     created_at: datetime = Field(..., description="Timestamp when message was created")
     conversation_id: str = Field(..., description="ID of the conversation")
 

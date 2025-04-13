@@ -10,7 +10,7 @@ class ConversationController:
     
     async def get_user_conversations(
         self, 
-        user_id: int, 
+        user_id: str, 
         page: int = 1, 
         limit: int = 20
     ) -> PaginatedConversationResponse:
@@ -31,21 +31,22 @@ class ConversationController:
         # This is a stub - students will implement the actual logic
         try:
             rows = await ConversationModel.get_user_conversations(user_id, page, limit)
-
+            print(rows)
             conversations = [
                 ConversationResponse(
-                    conversation_id=row["conversation_id"],
-                    other_user_id=row["other_user_id"],
+                    id=str(row["conversation_id"]),
+                    user1_id=str(row["user_id"]),
+                    user2_id=str(row["other_user_id"]),
                     last_message_at=row["last_message_at"]
                 )
                 for row in rows
             ]
 
             return PaginatedConversationResponse(
-                conversations=conversations,
+                data=conversations,
                 page=page,
                 limit=limit,
-                total=len(conversations)  # Cassandra can't give total count directly
+                total=len(conversations)  
             )
         except Exception as e:
             raise HTTPException(
